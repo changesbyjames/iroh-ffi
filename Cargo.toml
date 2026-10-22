@@ -62,3 +62,12 @@ uniffi = { version = "0.31.1", features = ["build"] }
 
 [profile.release]
 lto = true
+
+# The fork lets a connection's transport config disable NAT traversal
+# (`QuicTransportConfigBuilder::disable_nat_traversal`). Every crate of iroh's workspace comes from it, so
+# there is one copy of each type.
+[patch.crates-io]
+iroh = { git = "https://github.com/changesbyjames/iroh.git", branch = "relayed-connections" }
+iroh-base = { git = "https://github.com/changesbyjames/iroh.git", branch = "relayed-connections" }
+iroh-dns = { git = "https://github.com/changesbyjames/iroh.git", branch = "relayed-connections" }
+iroh-relay = { git = "https://github.com/changesbyjames/iroh.git", branch = "relayed-connections" }

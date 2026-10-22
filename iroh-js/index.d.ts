@@ -189,6 +189,14 @@ export declare class EndpointTicket {
 /** An incoming connection that has not yet begun its server-side handshake. */
 export declare class Incoming {
   accept(): Promise<Accepting>
+  /**
+   * Accept the connection without NAT traversal.
+   *
+   * The connection never negotiates iroh's holepunching, so this endpoint neither advertises its
+   * direct addresses to the remote nor probes the remote's: it stays on the path it arrived on,
+   * such as a relay. Use it for remotes that may reach this endpoint but must not learn its IPs.
+   */
+  acceptWithoutNatTraversal(): Promise<Accepting>
   refuse(): Promise<void>
   retry(): Promise<void>
   ignore(): Promise<void>

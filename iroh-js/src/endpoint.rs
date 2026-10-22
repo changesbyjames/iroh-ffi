@@ -24,6 +24,7 @@ use crate::{EndpointAddr, RelayMode, SecretKey, WatchHandle, path, watch};
 pub struct EndpointBuilder {
     inner: std::sync::Mutex<Option<iroh::endpoint::Builder>>,
     key_pinned: std::sync::atomic::AtomicBool,
+    alpns: std::sync::Mutex<Vec<Vec<u8>>>,
 }
 
 impl EndpointBuilder {
@@ -31,6 +32,7 @@ impl EndpointBuilder {
         Self {
             inner: std::sync::Mutex::new(Some(builder)),
             key_pinned: std::sync::atomic::AtomicBool::new(false),
+            alpns: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -109,6 +111,7 @@ impl EndpointBuilder {
     /// Set the advertised ALPNs.
     #[napi]
     pub fn alpns(&self, alpns: Vec<Vec<u8>>) {
+        *self.alpns.lock().unwrap() = alpns.clone();
         self.map(|b| b.alpns(alpns));
     }
 
@@ -139,7 +142,11 @@ impl EndpointBuilder {
             .take()
             .ok_or_else(|| anyhow::anyhow!("EndpointBuilder already consumed"))?;
         let endpoint = builder.bind().await.map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        Ok(Endpoint { inner: endpoint })
+        let alpns = self.alpns.lock().unwrap().clone();
+        Ok(Endpoint {
+            inner: endpoint,
+            alpns: Arc::new(std::sync::Mutex::new(alpns)),
+        })
     }
 }
 
@@ -296,6 +303,8 @@ pub struct EndpointOptions {
 #[napi]
 pub struct Endpoint {
     inner: endpoint::Endpoint,
+    /// The ALPNs the endpoint accepts, which a per-connection server config must repeat.
+    alpns: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
 }
 
 impl Endpoint {
@@ -398,6 +407,7 @@ impl Endpoint {
     /// Replace the set of advertised ALPNs.
     #[napi]
     pub fn set_alpns(&self, alpns: Vec<Vec<u8>>) {
+        *self.alpns.lock().unwrap() = alpns.clone();
         self.inner.set_alpns(alpns);
     }
 
@@ -476,7 +486,11 @@ impl Endpoint {
     #[napi]
     pub async fn accept_next(&self) -> Option<Incoming> {
         let inner = self.inner.accept().await?;
-        Some(Incoming(Mutex::new(Some(inner))))
+        Some(Incoming {
+            inner: Mutex::new(Some(inner)),
+            endpoint: self.inner.clone(),
+            alpns: self.alpns.clone(),
+        })
     }
 
     /// Watch for changes to this endpoint's address.
@@ -512,14 +526,18 @@ impl Endpoint {
 
 /// An incoming connection that has not yet begun its server-side handshake.
 #[napi]
-pub struct Incoming(Mutex<Option<iroh::endpoint::Incoming>>);
+pub struct Incoming {
+    inner: Mutex<Option<iroh::endpoint::Incoming>>,
+    endpoint: endpoint::Endpoint,
+    alpns: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
+}
 
 #[napi]
 impl Incoming {
     #[napi]
     pub async fn accept(&self) -> Result<Accepting> {
         let inner = self
-            .0
+            .inner
             .lock()
             .await
             .take()
@@ -528,10 +546,38 @@ impl Incoming {
         Ok(Accepting(Mutex::new(Some(accepting))))
     }
 
+    /// Accept the connection without NAT traversal.
+    ///
+    /// The connection never negotiates iroh's holepunching, so this endpoint neither advertises its
+    /// direct addresses to the remote nor probes the remote's: it stays on the path it arrived on,
+    /// such as a relay. Use it for remotes that may reach this endpoint but must not learn its IPs.
+    #[napi]
+    pub async fn accept_without_nat_traversal(&self) -> Result<Accepting> {
+        let inner = self
+            .inner
+            .lock()
+            .await
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Incoming already consumed"))?;
+        let alpns = self.alpns.lock().unwrap().clone();
+        let transport = endpoint::QuicTransportConfig::builder()
+            .disable_nat_traversal()
+            .build();
+        let config = self
+            .endpoint
+            .create_server_config_builder(alpns)
+            .set_transport_config(transport)
+            .build();
+        let accepting = inner
+            .accept_with(Arc::new(config))
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        Ok(Accepting(Mutex::new(Some(accepting))))
+    }
+
     #[napi]
     pub async fn refuse(&self) -> Result<()> {
         let inner = self
-            .0
+            .inner
             .lock()
             .await
             .take()
@@ -543,7 +589,7 @@ impl Incoming {
     #[napi]
     pub async fn retry(&self) -> Result<()> {
         let inner = self
-            .0
+            .inner
             .lock()
             .await
             .take()
@@ -556,7 +602,7 @@ impl Incoming {
     #[napi]
     pub async fn ignore(&self) -> Result<()> {
         let inner = self
-            .0
+            .inner
             .lock()
             .await
             .take()
@@ -567,7 +613,7 @@ impl Incoming {
 
     #[napi]
     pub async fn local_addr(&self) -> Result<IncomingLocalAddr> {
-        let guard = self.0.lock().await;
+        let guard = self.inner.lock().await;
         let inner = guard
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Incoming already consumed"))?;
@@ -576,7 +622,7 @@ impl Incoming {
 
     #[napi]
     pub async fn remote_addr(&self) -> Result<IncomingAddr> {
-        let guard = self.0.lock().await;
+        let guard = self.inner.lock().await;
         let inner = guard
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Incoming already consumed"))?;
@@ -585,7 +631,7 @@ impl Incoming {
 
     #[napi]
     pub async fn remote_addr_validated(&self) -> Result<bool> {
-        let guard = self.0.lock().await;
+        let guard = self.inner.lock().await;
         let inner = guard
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("Incoming already consumed"))?;
