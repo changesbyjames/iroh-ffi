@@ -1,3 +1,3 @@
-# `@number0/iroh-win32-x64-msvc`
+# `@strangecyan/iroh-win32-x64-msvc`
 
-This is the **x86_64-pc-windows-msvc** binary for `@number0/iroh`
+This is the **x86_64-pc-windows-msvc** binary for `@strangecyan/iroh`

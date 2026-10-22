@@ -1,3 +1,3 @@
-# `@number0/iroh-linux-arm64-gnu`
+# `@strangecyan/iroh-linux-arm64-gnu`
 
-This is the **aarch64-unknown-linux-gnu** binary for `@number0/iroh`
+This is the **aarch64-unknown-linux-gnu** binary for `@strangecyan/iroh`

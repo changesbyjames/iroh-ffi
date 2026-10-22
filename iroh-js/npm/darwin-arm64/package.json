@@ -1,9 +1,6 @@
 {
-  "name": "@number0/iroh-darwin-arm64",
-  "version": "1.1.0",
-  "os": [
-    "darwin"
-  ],
+  "name": "@strangecyan/iroh-darwin-arm64",
+  "version": "1.1.0-relayed.1",
   "cpu": [
     "arm64"
   ],
@@ -11,12 +8,28 @@
   "files": [
     "iroh.darwin-arm64.node"
   ],
+  "description": "A toolkit for building distributed applications. A fork of @number0/iroh whose incoming connections can be accepted without NAT traversal (Incoming.acceptWithoutNatTraversal).",
+  "keywords": [
+    "iroh",
+    "distributed",
+    "applications",
+    "p2p",
+    "peer-to-peer",
+    "networking",
+    "network",
+    "protocol"
+  ],
+  "author": "number0",
+  "license": "MIT OR Apache-2.0",
+  "engines": {
+    "node": ">= 20.3.0"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/n0-computer/iroh-ffi.git"
+    "url": "https://github.com/changesbyjames/iroh-ffi.git",
+    "directory": "iroh-js"
   },
-  "license": "MIT",
-  "engines": {
-    "node": ">= 10"
-  }
+  "os": [
+    "darwin"
+  ]
 }

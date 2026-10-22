@@ -1511,7 +1511,7 @@ checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 [[package]]
 name = "iroh"
 version = "1.4.1"
-source = "git+https://github.com/changesbyjames/iroh.git?branch=relayed-connections#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
+source = "git+https://github.com/changesbyjames/iroh.git?tag=v1.4.1-relayed.1#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
 dependencies = [
  "backon",
  "blake3",
@@ -1560,7 +1560,7 @@ dependencies = [
 [[package]]
 name = "iroh-base"
 version = "1.4.1"
-source = "git+https://github.com/changesbyjames/iroh.git?branch=relayed-connections#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
+source = "git+https://github.com/changesbyjames/iroh.git?tag=v1.4.1-relayed.1#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
 dependencies = [
  "curve25519-dalek",
  "data-encoding",
@@ -1578,7 +1578,7 @@ dependencies = [
 [[package]]
 name = "iroh-dns"
 version = "1.4.1"
-source = "git+https://github.com/changesbyjames/iroh.git?branch=relayed-connections#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
+source = "git+https://github.com/changesbyjames/iroh.git?tag=v1.4.1-relayed.1#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
 dependencies = [
  "arc-swap",
  "cfg_aliases",
@@ -1654,7 +1654,7 @@ dependencies = [
 [[package]]
 name = "iroh-relay"
 version = "1.4.1"
-source = "git+https://github.com/changesbyjames/iroh.git?branch=relayed-connections#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
+source = "git+https://github.com/changesbyjames/iroh.git?tag=v1.4.1-relayed.1#1b4630bcba32f7d445981f0dafee782a2f1e75f7"
 dependencies = [
  "blake3",
  "bytes",
@@ -3577,7 +3577,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
