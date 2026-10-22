@@ -4,8 +4,8 @@
 # Push a `node-v<version>` tag matching iroh-js/package.json to publish. Upstream's workflows fire on `v*` tags, so
 # this one's tags never start that way. Pushes to the fork's branch, and runs by hand, do everything but publish.
 #
-# Publishing uses npm trusted publishing (OIDC) once each package names this workflow as its trusted publisher.
-# Packages that do not exist yet cannot be configured, so the first publish falls back to the NPM_TOKEN secret.
+# Publishing uses npm trusted publishing (OIDC) alone: no token is stored. npm can only trust a workflow for a package
+# that exists, so a new package is first reserved with a placeholder by iroh-js/scripts/bootstrap-npm-trust.sh.
 
 name: Release Node binding
 
@@ -251,9 +251,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
       - name: Install npm with trusted publishing support
-        run: npm install -g npm@^11.5.1
+        run: npm install --global npm@11.19.0
       - uses: actions/download-artifact@v4
         with:
           pattern: bindings-*
@@ -290,8 +289,6 @@ jobs:
       # a partial release skips what is already published.
       - name: Publish
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           publish() {
@@ -299,11 +296,11 @@ jobs:
             local name version
             name=$(node -p "require('./$dir/package.json').name")
             version=$(node -p "require('./$dir/package.json').version")
-            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+            if npm view "${name}@${version}" version --registry https://registry.npmjs.org >/dev/null 2>&1; then
               echo "${name}@${version} is already published; skipping"
               return
             fi
-            (cd "$dir" && npm publish --access public --provenance --ignore-scripts --tag latest)
+            (cd "$dir" && npm publish --access public --provenance --ignore-scripts --tag latest --registry https://registry.npmjs.org)
           }
           for dir in npm/*; do publish "$dir"; done
           publish .
