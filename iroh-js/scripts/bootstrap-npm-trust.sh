@@ -47,27 +47,65 @@ if [ "${DRY_RUN:-}" != 1 ]; then
   echo "Logged in as ${user}; configuring ${repository} (${WORKFLOW}, environment ${ENVIRONMENT})"
 fi
 
-placeholder=$(mktemp -d)
-trap 'rm -rf "$placeholder"' EXIT
+# The registry's answer for a package, or one of its versions, past npm's CDN cache: 200 once it is visible.
+visible() {
+  curl -s -o /dev/null -w '%{http_code}' -H 'Cache-Control: no-cache' "${REGISTRY}/${1/\//%2f}${2:+/$2}"
+}
 
+placeholder=$(mktemp -d)
+output=$(mktemp)
+trap 'rm -rf "$placeholder" "$output"' EXIT
+
+# Publish every missing placeholder first, so they all fall in one two-factor window. npm creates a new package with
+# its own 0.0.0-stage version, and the placeholder only becomes visible a minute or two later.
+published=()
 for package in "${packages[@]}"; do
   echo
   echo "== ${package}"
-  if npm view "$package" name --registry "$REGISTRY" >/dev/null 2>&1; then
+  if [ "$(visible "$package")" = 200 ]; then
     echo "exists on npm"
-  else
-    cat > "${placeholder}/package.json" <<EOF
+    continue
+  fi
+  cat > "${placeholder}/package.json" <<EOF
 {
   "name": "${package}",
   "version": "${PLACEHOLDER}",
   "description": "Placeholder reserving the name for trusted publishing from ${repository}. Install a real version.",
-  "repository": { "type": "git", "url": "https://github.com/${repository}.git" },
+  "repository": { "type": "git", "url": "git+https://github.com/${repository}.git" },
   "license": "MIT OR Apache-2.0"
 }
 EOF
+  if [ "${DRY_RUN:-}" = 1 ]; then
     run npm publish "$placeholder" --access public --tag bootstrap --registry "$REGISTRY"
-    run npm deprecate "${package}@${PLACEHOLDER}" "Placeholder: install a real version" --registry "$REGISTRY"
+  elif ! npm publish "$placeholder" --access public --tag bootstrap --registry "$REGISTRY" 2>&1 | tee "$output"; then
+    # A publish still being processed refuses another of the same version: it will arrive.
+    if ! grep -qE 'previously staged version|cannot publish over the previously published' "$output"; then
+      exit 1
+    fi
+    echo "already published, still being processed"
   fi
+  published+=("$package")
+done
+
+if [ "${DRY_RUN:-}" != 1 ]; then
+  for package in "${published[@]+"${published[@]}"}"; do
+    printf '\nWaiting for %s@%s to become visible' "$package" "$PLACEHOLDER"
+    for _ in $(seq 60); do
+      [ "$(visible "$package" "$PLACEHOLDER")" = 200 ] && break
+      printf .
+      sleep 10
+    done
+    if [ "$(visible "$package" "$PLACEHOLDER")" != 200 ]; then
+      printf '\n%s@%s is still not visible after 10 minutes: run this again later\n' "$package" "$PLACEHOLDER" >&2
+      exit 1
+    fi
+  done
+  echo
+fi
+
+for package in "${packages[@]}"; do
+  echo
+  echo "== trust: ${package}"
   if [ "${DRY_RUN:-}" != 1 ] && [ "$(npm trust list "$package" --json --registry "$REGISTRY" 2>/dev/null | node -e 'const out = require("fs").readFileSync(0, "utf8").trim(); const list = out ? JSON.parse(out) : []; console.log(Array.isArray(list) ? list.length : 1)')" != 0 ]; then
     echo "already trusts a publisher:"
     npm trust list "$package" --registry "$REGISTRY"
@@ -77,6 +115,26 @@ EOF
     --allow-publish --yes --registry "$REGISTRY"
   # npm's guidance for configuring packages in bulk, to stay clear of its rate limit.
   sleep 2
+done
+
+# Cosmetic: a placeholder left undeprecated does no harm, so failing here only warns.
+for package in "${packages[@]}"; do
+  if [ "${DRY_RUN:-}" = 1 ]; then
+    run npm deprecate "${package}@${PLACEHOLDER}" "Placeholder: install a real version" --registry "$REGISTRY"
+    continue
+  fi
+  versions=$(curl -s -H 'Cache-Control: no-cache' "${REGISTRY}/${package/\//%2f}" | node -e '
+    let text = "";
+    process.stdin.on("data", chunk => (text += chunk)).on("end", () => {
+      const versions = JSON.parse(text).versions ?? {};
+      for (const [version, manifest] of Object.entries(versions))
+        if (version.startsWith("0.0.0-bootstrap.") && !manifest.deprecated) console.log(version);
+    });
+  ')
+  for version in $versions; do
+    npm deprecate "${package}@${version}" "Placeholder: install a real version" --registry "$REGISTRY" ||
+      echo "warning: could not deprecate ${package}@${version}" >&2
+  done
 done
 
 echo
