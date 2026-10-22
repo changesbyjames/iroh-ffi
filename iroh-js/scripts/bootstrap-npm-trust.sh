@@ -2,7 +2,7 @@
 # Make every package the release workflow publishes trust it, so releases publish over OIDC with no stored token.
 #
 # npm can only trust a workflow for a package that already exists. So each package that is not on npm yet is first
-# reserved with a placeholder version (0.0.0-bootstrap.0, under the `bootstrap` dist-tag, deprecated), then trusts
+# reserved with a placeholder version (under the `bootstrap` dist-tag, deprecated), then trusts
 # .github/workflows/release_node.yml in this repository, in the `npm` environment. Packages that already exist or
 # already trust a publisher are left alone, so it is safe to run again, for example after adding a platform.
 #
@@ -18,7 +18,9 @@ cd "$(dirname "$0")/.."
 REGISTRY=https://registry.npmjs.org
 WORKFLOW=release_node.yml
 ENVIRONMENT=npm
-PLACEHOLDER=0.0.0-bootstrap.0
+# A publish that never completed its two-factor check can still hold its version (`Cannot publish over previously
+# staged version`): set PLACEHOLDER to another one to get past it.
+PLACEHOLDER=${PLACEHOLDER:-0.0.0-bootstrap.1}
 
 name=$(node -p "require('./package.json').name")
 repository=$(node -p "require('./package.json').repository.url.replace(/^.*github\.com\//, '').replace(/\.git$/, '')")
