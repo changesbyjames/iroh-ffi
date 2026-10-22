@@ -79,17 +79,11 @@ jobs:
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             build: yarn build --target x86_64-unknown-linux-gnu --use-napi-cross
+          # Unlike upstream, no system cross compiler: it would override napi-cross's and link against the runner's
+          # glibc (2.39), so the addon would not load before glibc 2.33.
           - host: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
-            setup: |
-              sudo apt-get update
-              sudo apt-get -y install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-            build: |-
-              set -e
-              export CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
-              export CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
-              export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
-              yarn build --target aarch64-unknown-linux-gnu --use-napi-cross
+            build: yarn build --target aarch64-unknown-linux-gnu --use-napi-cross
           # musl through zig, as upstream builds it. The shims drop the `--target` flags cc-rs adds, which zig
           # rejects, and on aarch64 a linker flag zig does not know.
           - host: ubuntu-24.04
