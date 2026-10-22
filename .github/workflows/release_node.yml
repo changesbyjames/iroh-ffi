@@ -68,7 +68,9 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-15
+          # Cross-compiled on an Intel runner: the hosted arm64 macOS pool is often too short of capacity to pick up a
+          # job at all, and Xcode's SDK builds for either architecture.
+          - host: macos-15-intel
             target: aarch64-apple-darwin
             build: yarn build --target aarch64-apple-darwin
           - host: windows-latest
@@ -174,9 +176,6 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - platform: darwin-arm64
-            target: aarch64-apple-darwin
-            host: macos-15
           - platform: win32-x64-msvc
             target: x86_64-pc-windows-msvc
             host: windows-latest
@@ -232,6 +231,39 @@ jobs:
         run: >-
           docker run --rm -v "${RUNNER_TEMP}/smoke:/smoke" -w /smoke ${{ matrix.settings.image }}
           sh -c 'npm install --no-audit --no-fund ./*.tgz && node smoke-node.mjs'
+
+  # The arm64 addon cannot load on the Intel runner that builds it, so it is smoke-tested on an arm64 one. That pool can
+  # fail to pick up a job at all, so publishing does not wait for this: check its result, or smoke-test the
+  # bindings-aarch64-apple-darwin artifact on an Apple silicon Mac, before relying on a release.
+  smoke-macos:
+    name: Smoke darwin-arm64
+    needs: build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: bindings-aarch64-apple-darwin
+          path: iroh-js/npm/darwin-arm64
+      - name: Pack the package and the addon
+        shell: bash
+        run: |
+          set -euo pipefail
+          smoke="${RUNNER_TEMP}/smoke"
+          mkdir -p "$smoke"
+          (cd iroh-js && npm pack --silent --pack-destination "$smoke")
+          (cd iroh-js/npm/darwin-arm64 && npm pack --silent --pack-destination "$smoke")
+          cp .github/scripts/smoke-node.mjs "$smoke/"
+          echo '{"name":"smoke","private":true,"type":"module"}' > "$smoke/package.json"
+      - name: Smoke test
+        shell: bash
+        working-directory: ${{ runner.temp }}/smoke
+        run: |
+          npm install --no-audit --no-fund ./*.tgz
+          node smoke-node.mjs
 
   publish:
     name: Publish to npm
