@@ -53,8 +53,7 @@ visible() {
 }
 
 placeholder=$(mktemp -d)
-output=$(mktemp)
-trap 'rm -rf "$placeholder" "$output"' EXIT
+trap 'rm -rf "$placeholder"' EXIT
 
 # Publish every missing placeholder first, so they all fall in one two-factor window. npm creates a new package with
 # its own 0.0.0-stage version, and the placeholder only becomes visible a minute or two later.
@@ -75,11 +74,12 @@ for package in "${packages[@]}"; do
   "license": "MIT OR Apache-2.0"
 }
 EOF
-  if [ "${DRY_RUN:-}" = 1 ]; then
-    run npm publish "$placeholder" --access public --tag bootstrap --registry "$REGISTRY"
-  elif ! npm publish "$placeholder" --access public --tag bootstrap --registry "$REGISTRY" 2>&1 | tee "$output"; then
-    # A publish still being processed refuses another of the same version: it will arrive.
-    if ! grep -qE 'previously staged version|cannot publish over the previously published' "$output"; then
+  # npm's output stays on the terminal: piped, npm cannot open the browser for two-factor authentication.
+  if ! run npm publish "$placeholder" --access public --tag bootstrap --registry "$REGISTRY"; then
+    # A publish still being processed refuses another of the same version. If the package has appeared since, the
+    # earlier publish arrived; otherwise this one failed.
+    if [ "$(visible "$package")" != 200 ]; then
+      echo "Publishing ${package} failed" >&2
       exit 1
     fi
     echo "already published, still being processed"
