@@ -79,11 +79,24 @@ jobs:
           - host: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             build: yarn build --target x86_64-unknown-linux-gnu --use-napi-cross
-          # Unlike upstream, no system cross compiler: it would override napi-cross's and link against the runner's
-          # glibc (2.39), so the addon would not load before glibc 2.33.
+          # Through zig against glibc 2.17, like the musl builds below. Upstream's system cross compiler links against
+          # the runner's glibc, so the addon would not load before 2.33, and napi-cross's gcc cannot assemble ring.
           - host: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
-            build: yarn build --target aarch64-unknown-linux-gnu --use-napi-cross
+            setup: |
+              pip3 install --break-system-packages ziglang
+            build: |-
+              set -e
+              mkdir -p "$HOME/zigshim"
+              printf '#!/bin/sh\nA=;for x in "$@";do case "$x" in --target=*|-Wl,--fix-cortex-a53-843419) ;; *) A="$A $x";; esac;done;exec python3 -m ziglang cc -target aarch64-linux-gnu.2.17 $A\n' > "$HOME/zigshim/zcc"
+              printf '#!/bin/sh\nA=;for x in "$@";do case "$x" in --target=*) ;; *) A="$A $x";; esac;done;exec python3 -m ziglang c++ -target aarch64-linux-gnu.2.17 $A\n' > "$HOME/zigshim/zcxx"
+              chmod +x "$HOME/zigshim/zcc" "$HOME/zigshim/zcxx"
+              export CC_aarch64_unknown_linux_gnu="$HOME/zigshim/zcc"
+              export CXX_aarch64_unknown_linux_gnu="$HOME/zigshim/zcxx"
+              export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="$HOME/zigshim/zcc"
+              export TARGET_CC="$HOME/zigshim/zcc"
+              export TARGET_CXX="$HOME/zigshim/zcxx"
+              yarn build --target aarch64-unknown-linux-gnu
           # musl through zig, as upstream builds it. The shims drop the `--target` flags cc-rs adds, which zig
           # rejects, and on aarch64 a linker flag zig does not know.
           - host: ubuntu-24.04
